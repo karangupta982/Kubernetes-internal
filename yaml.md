@@ -79,6 +79,8 @@ Matlab:
 
 **YAML = YAML Ain’t Markup Language**
 
+**Kubernetes API server is incredibly strict about how it parses YAML**
+
 ### Matlab kya hai?
 
 YAML koi programming language nahi hai.
