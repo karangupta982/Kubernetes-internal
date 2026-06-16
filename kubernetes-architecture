@@ -1,1 +1,20 @@
-
+- Internally components talk in GRPC and we talk to etcd or others in REST, mostly GRPC is used for internal communication.
+- etcd (etc d stands for distributed) is a file system and we use it as a database
+- Master node component: etcd, kube api server, scheduler, controller manager, cloud controller manager (part of controller manager)
+Kube api server: Most important part of kube api server 
+- for example if master node get down and our applicaton is already deployed then would it run? Answer: application would run because application is deployed on worker node and master node is for management only, if you want to update master node then it would cause error since Kube api server is not working.
+Functions:
+ - Authentication: bearer token, certificate
+ - Authorization: Role based access control for example Team lead can create cluster and intern can see the cluster.
+ - Admission controller: Two types: Validating admission controller, mutating admission controller. Mutating admission controller is very dangerous thing inside whole cluster, if someone has twick something then whole production may get down. Admission controllers mutate and validate karte h. most of security things are applied in mutating admission controllers. 
+https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/
+    - the kube-apiserver is the core component that serves the Kubernetes API. It acts as the front door and the central administrative hub for the entire Kubernetes control plane.
+    - Exposes the API: It presents a RESTful HTTP API utilized by external users, internal cluster components, and command-line tools like kubectl.
+    - Nerve Center: Every action—such as creating, modifying, or deleting a Pod—must pass through this server.
+    - Single Source of Truth Access: It is the only component in the cluster that talks directly to the etcd data store.
+    - Request LifecycleWhen you send a request to the Kubernetes API, the kube-apiserver processes it through three main sequential gates:
+        Authentication: Verifies your identity via client certificates, bearer tokens, or identity providers.
+        Authorization: Validates if you have the permission to execute the requested action using policies like Role-Based Access Control (RBAC).
+        Admission Control: Evaluates the request against cluster rules (e.g., resource quotas) and can modify or reject the object before final execution.
+        Once these gates are passed, the configuration is successfully written to etcd.
+ - Watch for Updates: 
