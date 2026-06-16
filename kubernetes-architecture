@@ -17,4 +17,22 @@ https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/
         Authorization: Validates if you have the permission to execute the requested action using policies like Role-Based Access Control (RBAC).
         Admission Control: Evaluates the request against cluster rules (e.g., resource quotas) and can modify or reject the object before final execution.
         Once these gates are passed, the configuration is successfully written to etcd.
- - Watch for Updates: 
+    - How will you know which Admission controller is enabled in you cluster? Answer: cd /etc/kubernetes/manifests then ls then cat kube-apiserver.yaml | grep enable    or grep admission
+    - Plugin: kuberenetes has plugin based architecture in which you need to add plugin of the controller you want in your cluster.
+    - CRD (Custom Resource Defination): It is way to define to extend the functionality of kuberenetes by creating a hardcoded way to deploy some application with prewritten configurations. We write CRD and use it when we want to deploy someapplication with specified resources deinfed in CRD.
+    - 
+ - Watch for Updates: Kube api server also watch for updates as well
+ - Internally talks in grpc because it is extremely fast, it has protobuf as well and other things as well
+
+- ETCD: It is a database, a distributed key value store, a No-Sql Database, once request is successul via kube api server then it gets stored in etcd
+   - A problem named, distributed consensus:  need to be covered.
+   - Raft Consensus: need to cover.
+   - Etcd has 3 things: Follower, candidate, Leader. when there are multiple etcd nodes then election takes place for this and voting happens for example 1,2,3,4 nodes, 1, 2 wants to be leader and 3 supports 2 and 4 supports 1 then in this case there is tie and reelection takes place until some one becomes a leader. Once someone become a leader then other becomes follower. Leader on certain interval sends notification to every other node saying i am alive, once that notification don't comes that means 2 is not alive.
+   - Raft Consensus: https://thesecretlivesofdata.com/raft/
+   - Etcd is protobuf(fastest protocol) based, raft consensus based, Write ahead log based means before storing data in disk or storage the data is first written in text files so that data is not lost if machine got stopped while storing data in disk, because storing data in disk takes time.
+   - By default, etcd does not have any encryption on data, anybody can read the data after getting access to etcd.
+   - what number of nodes should be added to a cluster so that system is highly available in highly cost optimised manner? answer is always apply odd number of nodes because it's formula is (n/2 + 1), more fault tolerance more available. not understood completely but it needs to be completed.
+   - Quorem?
+
+
+ 
