@@ -34,5 +34,45 @@ https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/
    - what number of nodes should be added to a cluster so that system is highly available in highly cost optimised manner? answer is always apply odd number of nodes because it's formula is (n/2 + 1), more fault tolerance more available. not understood completely but it needs to be completed.
    - Quorem?
 
+- Kube Scheduler: It has two cycles Scheduling cycle and Binding Cycle. Request goes from api server to etcd then kube scheduler, etcd tells scheduler to schedule kar de, etcd kehta ki pod ko queue me daalde, then wo sort hoti h and then prefilter, prefilter me dekhte h ki koi tentoleration (what is it?) to nhi h, aise cheeze dekhi jaati h ki node pe ya pod pe koi aise restriction to nhi lagi jiski wajah se hum schedule na kar paye. Ager restriction lagi h then priority pod concept like if restrictions are there then agar low priority pod run ho rha hota h then use kick out kiya jata h and iski jagah ek priority pod dalta h, low priority pod ko preenqueue state me daal deta h, then it again gets schedule when it's time come. Inside Score, pre score and normalize score nodes me pod ko ek ranking milti h then pod reserve ho jata h for scheduling here scheduling cycle finish, after that binding cycle starts and binding cycle me pod ho jata h bind, don't have much information on this.
 
+- kube controller manager: It checks whether everything is running fine or not, if something is not fine then it takes specific actions, it check whether pos is running fine, it checks node controller, service controller, namespace controller, daemon set controller, cron job controller, custom controller,...
+   - if something breaks it calls api server then api server calls etcd and kubelet and ask kubelet to unschedule that pod,... no more information is present on this, clearity needed on this.
+
+- Cloud controller manager: it does same as kube controller manager but at cloud level.
+
+
+Worker Node: It has three things: Kubelet, kubeproxy, Container runtime interface.
+- kubeproxy: It runs in background like a deamon set. installed on every worker node, jo ip internal ke liye banti h use cluster ip bolte h, cluster i[ is also called private ip. 
+ 10.00000000.00000000.00000000
+ 172.00000000.00000000.00000000
+ 192.00000000.00000000.00000000
+these are private IP's which are not allowd to be used as public IP but these are only allowed for private Ip. Kubeproxy main work is to create IP tables for mapping service to pod using Private IP. Kubelet runs as a deamon uns as Deamon. Kubelet ka kaam h api server se baat karna or container ko run karta h and manage karta h.
+
+- Initially kubenetes was a small project so at that time everything was hard coded so system was mostly hardcoded and companies using kubernetes has to update their code with every new release of kubernetes. So, for resolving this new interfaces were developed known as CRI,CNI, CSI
+
+CRI, CNI, and CSI are standardized interfaces (or APIs) that allow Kubernetes to communicate with various third-party tools. They define how Kubernetes communicates with the outside world, while the actual software components that implement these interfaces are the drivers or plugins.
+The easiest way to remember their jobs is:CRI makes your containers run.
+CNI lets them talk to each other.
+CSI gives them a place to store data.
+Here is how the distinction works in practice:
+1. CRI: Container Runtime InterfaceThe Interface: Defines how the Kubernetes node agent (kubelet) tells the underlying engine to start, stop, and manage containers.The Drivers: The actual engine doing the work. Common drivers include containerd, CRI-O, and Docker (via a built-in shim).
+2. CNI: Container Network InterfaceThe Interface: Defines how pods get network connectivity and IP addresses. Kubernetes has no built-in networking; it relies entirely on CNI.The Drivers/Plugins: The networking tools that wire up your clusters. Examples include Calico, Flannel, Cilium, and Amazon VPC CNI. It assign IP to the pod, can check kitne packets in gye, kitne out gaye, what is movement of data and observability provide karna.
+3. CSI: Container Storage InterfaceThe Interface: Defines how Kubernetes mounts and unmounts persistent storage (disks, block storage, file systems) to your containers.The Drivers: Third-party storage plugins written by cloud and hardware vendors. Examples include AWS EBS CSI Driver, Azure Disk, Google Persistent Disk, and Portworx.
+
+- kubelet: ask CRI to deploy container, OCI ek set of parameters h isme multiple cheeze likhi h, ye docker ke time pe bna tha, isme runc kerke ek tool h jo container banata h jab CRI usko bolta h container banaane ke liye, runc cgroups ko bolta h container ke liye then cgroups system capability check karta h and agar everything fine then container bana deta h. Then response back to kubelet is sent that pod has been deployed then kubelet send container to run on that pod. runc go based h, iske baad crun aaya jo c me ha or jyada fast h. now he is telling different thing: Kubelet calls CRI to take care of the container then CGroups are configured then Configure Pods using CNI then images are pulled then container is started then application is run.
+- it is not clear to me correctly, a lot of questions are the different between runc and crun, does CRI makes pod? what is shim concept?
+
+- in kubernetes, queue is used at most of places to put items to be tracked.
+
+Key Metrics that is used to track by prometheus
+- etcd_server_leader
+- etcd_server_leader_changes_seen_total
+- etcd_network_peer_round_trip_time_seconds_bucket
+- workqueue_adds_total
+- workqueue_depth
+- kubelet_running_pods
+- kubelet_pod_start_duration_second_count
+- rule_sync
+- apiserver_admission_controller_duration_second
  
