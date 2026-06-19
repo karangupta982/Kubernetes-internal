@@ -262,6 +262,113 @@ fruits = [apple, mango, banana]
 * `-` = list item
 * indentation = nesting / structure
 
+In Kubernetes manifests, you rarely see a simple list of strings. Instead, you see a List of Objects (Key-Value maps).
+```yaml
+spec:
+  containers:
+    - name: nginx-container
+      image: nginx:latest
+      ports:
+        - containerPort: 80
+    - name: sidecar-container
+      image: fluentd:latest
+```
+
+How to read this like a parser:
+containers: tells the system: "An array/list of containers is starting here."
+
+The first - name: nginx-container means: "This is the first item in the list, and this item is an object. The object starts with the key name."
+
+Because image: and ports: are aligned horizontally right under name (without a new hyphen), they belong to that same first object.
+
+The second - name: sidecar-container has a hyphen aligned with the first one. This means: "The first object is finished. This is the second item in the containers list."
+      
+---
+
+2. Critical Missing YAML Features for K8s Exams
+Kubernetes manifests use advanced YAML features extensively, especially for managing configuration data (ConfigMaps and Secrets). These are frequently tested in certifications.
+
+A. Multiline Strings: Literal Block Scalar (|) vs. Folded Scalar (>)
+When passing scripts, configuration files, or certificates inside a YAML, you cannot just write multiple lines. You must use specific indicators:
+
+Literal Indicator (|): Preserves newlines and formatting exactly as written. (Crucial for embedded scripts or Nginx configs).
+
+Folded Indicator (>): Replaces newlines with spaces, converting a multi-line paragraph into a single long string.
+
+YAML
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: special-configs
+data:
+  # Preserves newlines exactly as shown
+  script.sh: |
+    #!/bin/bash
+    echo "Starting process..."
+    systemctl restart nginx
+  
+  # Will turn into: "This is a very long sentence compiled into one line."
+  one-line-string: >
+    This is a very
+    long sentence compiled
+    into one line.
+B. Anchors (&) and Aliases (*) for DRY (Don't Repeat Yourself)
+If you have repetitive blocks (like identical resource limits across multiple containers), you can use anchors to define a block and aliases to inject it.
+
+YAML
+# Define a reusable block using '&'     (didn't understand this, what is the exact syntax and what it is doing)
+helpers: &resourceLimits
+  resources:
+    limits:
+      cpu: "200m"
+      memory: "512Mi"
+
+spec:
+  containers:
+    - name: app
+      image: app:v1
+      <<: *resourceLimits # Inject the block using '*'   (didn't understand this, what is the exact syntax and what it is doing)
+      
+3. Rectifying and Deepening the Linux Section
+For CKA/CKS, you will be SSH-ing into broken cluster nodes. Your Linux understanding needs to map directly to control plane components.
+
+A. What exactly is systemd and systemt?
+In your notes, you mentioned "systemd linux ki sari commands chalata h, but what is systemd" and "system etc ke ander store hota h". Let's clear up the terminology:
+
+systemd is the Init System (PID 1) for Linux. It is the very first process that starts when the machine boots up. Its job is to bootstrap the entire operating system and manage background services (daemons).
+
+In a Kubernetes cluster, the kubelet daemon and your Container Runtime (containerd) run as systemd services. If a node shows a NotReady status, your first debugging step is checking systemd.
+
+The path configuration: Service configuration files are stored in /etc/systemd/system/ (not system etc).
+
+Bash
+# Critical CKA Commands to check if K8s is alive on a node:
+sudo systemctl status kubelet        # Check if kubelet is running
+sudo systemctl restart kubelet       # Restart if it crashes or freezes
+B. Advanced Logging with journalctl
+Since kubelet runs natively on the host OS via systemd (not inside a container), you cannot run kubectl logs to debug it. You must use journalctl.
+
+Bash
+# View kubelet logs chronologically
+sudo journalctl -u kubelet
+
+# View only the most recent logs with real-time streaming (Crucial for live debugging)
+sudo journalctl -u kubelet -f
+
+# Filter out only error-level messages
+sudo journalctl -u kubelet -p err
+C. Container Runtime Debugging (crictl vs docker)
+Modern Kubernetes clusters do not use Docker directly; they use lightweight runtimes via the Container Runtime Interface (CRI), usually containerd.
+Because Docker commands (docker ps) won't work on these nodes, you use crictl.
+
+⚠️ Exam Gotcha: crictl requires a configuration file at /etc/crictl.yaml pointing to the runtime endpoint (unix:///var/run/containerd/containerd.sock). If it doesn't work during the exam, verify this file exists!
+
+4. Up-to-Date Kubernetes Facts for 2026
+Release Cycle: You noted that Kubernetes releases 2 times a year. Correction: Kubernetes shifted its release cadence a while ago to 3 releases per year (approximately every 4 months).
+
+Current Version (2026): As of mid-2026, the Kubernetes community is tracking around v1.33 / v1.34. Make sure to check the exact documentation version allowed in your upcoming exam environment, as minor syntax details can shift.
+
+
 ---
 
 ## 8) YAML list of objects
@@ -1153,7 +1260,7 @@ Together Die
 ---
 
 
-
+# These are the notes i made from lecture
 # YAML
 - Yaml is case sensitive.
 - Data -> Byte stream + conversion content to gain the exact format again -> serialization
