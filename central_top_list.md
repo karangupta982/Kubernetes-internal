@@ -78,6 +78,13 @@ Sabse zyada practice Troubleshooting + Cluster Architecture par karo — ye 55% 
 ## G) FOUNDATIONAL THEORY (interview-only, low exam-weight but HIGH interview-weight)
 
 50. Serialization/Deserialization, YAML vs JSON vs Protobuf, why Kubernetes chose YAML for manifests but JSON internally — ye "tell me about yourself / explain basics" type interview questions mein aata hai, exam mein nahi aata seedha
+51. `kubectl get <resource> -A` — pehla command jab koi resource "missing" lage
+52. `kubectl api-resources` — namespaced vs cluster-scoped check karne ka authoritative tarika
+53. `kubectl.kubernetes.io/last-applied-configuration` annotation — apply ka three-way merge isi par based hai
+54. create + apply ko MIX mat karo same resource par — annotation missing hone se merge unpredictable hota hai
+55. Bare Pod fix = delete+recreate; Deployment-managed pod fix = `kubectl set image` (controller khud replace karega)
+56. kubectl context switch HAR exam question se pehle — `kubectl config use-context <name>`
+57. Exam-day aliases: `alias k=kubectl`, `export do="--dry-run=client -o yaml"`, `export now="--force --grace-period=0"`
 
 ---
 
