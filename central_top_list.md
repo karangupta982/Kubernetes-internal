@@ -85,6 +85,15 @@ Sabse zyada practice Troubleshooting + Cluster Architecture par karo — ye 55% 
 55. Bare Pod fix = delete+recreate; Deployment-managed pod fix = `kubectl set image` (controller khud replace karega)
 56. kubectl context switch HAR exam question se pehle — `kubectl config use-context <name>`
 57. Exam-day aliases: `alias k=kubectl`, `export do="--dry-run=client -o yaml"`, `export now="--force --grace-period=0"`
+58. veth pair + bridge (cni0) = same-node pod-to-pod mechanism
+59. Overlay (VXLAN encapsulation) vs Direct Routing (BGP) = two CNI approaches for cross-node traffic
+60. NetworkPolicy = allow-list model, only enforced if CNI supports it (Flannel basic mode does NOT)
+61. Service = no process, just iptables/IPVS DNAT rules maintained by kube-proxy
+62. DNS FQDN: <svc>.<namespace>.svc.cluster.local — search domains in /etc/resolv.conf make shortcuts work
+63. Service type hierarchy: ClusterIP ⊂ NodePort ⊂ LoadBalancer (each builds on the previous)
+64. Ingress needs an Ingress Controller running — the Ingress object alone does nothing
+65. Egress uses SNAT at the node level to make pod traffic internet-routable
+66. Kubernetes Networking Model's 3 guarantees: no-NAT pod-to-pod, no-NAT node-to-pod, consistent self/external IP view
 
 ---
 
