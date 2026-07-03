@@ -1,0 +1,209 @@
+# Labels, Selectors, ReplicaSets, Deployments, Production Strategies
+
+- kubectl run day5 --image nginx
+- kubectl get day5 -oyaml
+
+-- yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: "2026-07-02T16:48:11Z"
+  generation: 1
+  labels:
+    run: day5pod1
+  name: day5pod1
+  namespace: default
+  resourceVersion: "610"
+  uid: 02d5e443-c2d4-44bf-8d3b-66df1f912b5e
+spec:
+  containers:
+  - image: nginx
+    imagePullPolicy: Always
+    name: day5pod1
+    resources: {}
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-xjssf
+      readOnly: true
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  nodeName: day5-control-plane
+  preemptionPolicy: PreemptLowerPriority
+  priority: 0
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext: {}
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+  volumes:
+  - name: kube-api-access-xjssf
+    projected:
+      defaultMode: 420
+      sources:
+      - serviceAccountToken:
+          expirationSeconds: 3607
+          path: token
+      - configMap:
+          items:
+          - key: ca.crt
+            path: ca.crt
+          name: kube-root-ca.crt
+      - downwardAPI:
+          items:
+          - fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+            path: namespace
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2026-07-02T16:48:12Z"
+    observedGeneration: 1
+    status: "True"
+    type: PodReadyToStartContainers
+  - lastProbeTime: null
+    lastTransitionTime: "2026-07-02T16:48:11Z"
+    observedGeneration: 1
+    status: "True"
+    type: Initialized
+  - lastProbeTime: null
+    lastTransitionTime: "2026-07-02T16:48:34Z"
+    observedGeneration: 1
+    status: "True"
+    type: Ready
+  - lastProbeTime: null
+    lastTransitionTime: "2026-07-02T16:48:34Z"
+    observedGeneration: 1
+    status: "True"
+    type: ContainersReady
+  - lastProbeTime: null
+    lastTransitionTime: "2026-07-02T16:48:11Z"
+    observedGeneration: 1
+    status: "True"
+    type: PodScheduled
+  containerStatuses:
+  - containerID: containerd://c7b3d5e6a151dd9cf0fb7321491999402c11580c7df2b9c52c89336dd3512fdc
+    image: docker.io/library/nginx:latest
+    imageID: docker.io/library/nginx@sha256:ec4ed8b5299e5e90694af7750eb6dffd2627317d30544d056b0371f8082f7bce
+    lastState: {}
+    name: day5pod1
+    ready: true
+    resources: {}
+    restartCount: 0
+    started: true
+    state:
+      running:
+        startedAt: "2026-07-02T16:48:34Z"
+    user:
+      linux:
+        gid: 0
+        supplementalGroups:
+        - 0
+        uid: 0
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-xjssf
+      readOnly: true
+      recursiveReadOnly: Disabled
+  hostIP: 172.19.0.2
+  hostIPs:
+  - ip: 172.19.0.2
+  observedGeneration: 1
+  phase: Running
+  podIP: 10.244.0.5
+  podIPs:
+  - ip: 10.244.0.5
+  qosClass: BestEffort
+  resources: {}
+  startTime: "2026-07-02T16:48:11Z"
+
+## Labels
+- key-value pairs
+- if you don't specify key value of labels then by default key would be run and value would be name of pod
+- If cluster is deleted then each resource gets deleted except persistent value (SSD, HDDs, DB).
+
+
+- Spec section: Here actual work to be done is written,
+  - we can pull image from private (How from private because they need some passwords) and public repositories
+  - imagePullPolicy: ?
+  - Understand all yaml configurations so that i can answer questions regarding 
+  - for answering the name of scheduler used for deploying the pods, we need to check this in spec section of yaml file
+  - Can we tweek scheduler, question may be asked in interview like this then how should i answer this?
+  - Security Context is by default enabled in cloud clusters, for example if in pod we can run curl or download anything then if any hacker or unauthorized person could enter and downlaod anything irrelevant and destroy that resource
+  - Probes: Livelyness, readyness, startup
+  - types: Initialized, Ready, ContainerReady, PodScheduled
+  - restartcount says how many times this pod got down and up.
+  - we can add multiple labels but when in interview if asked to add labels then you need to first ask that what is the usecase for this, don't add label randomly.
+      for example: environment: staging
+                   release: alpha1.1
+                   tier: kubecloud
+  - we can see labels via this command, kubectl get pods --show-labels
+  - if you change spec then only new pod would be recreated or it would be changed otherwise it would be unchanged.
+  - k get pods -l release=aplha1.1  (to get all the pods which has label as release)
+  - k label pod -l release=alpha1.1 work=tut (-l to select labels and command adds one more label called work=tut in existing labels)
+  - k get pods -l run!=pod5 (to find pods which does not have label as pod5)
+  - k edit pod label-demo (to open and edit that file, if we change any configurations above spec then resource does not get recreated after getting delete but any configuration below spec is modified then resource get deleted and then gets recreated with modified configuration)
+
+
+## Replica
+- pods are ephimeral (means if they dead then they would be created with different ip)
+- Replicaset were implemented using replication controller
+- Right now Recommended form of running any application is deployments
+- In replicaset we can run homogeneous (Same type of pods e,g. all are of nginx) and heterogeneous (Differenet types of pods e.g. one pod of redis, another mongodb, other nginx) pods
+- Replicationcontroller is not used now directly. Explain each replicationController yaml configuration so that i may understand it better and answer in interview. one of questions: why selectors are  there, what it does, what labels are doing there and a lot of key value pairs are there.
+- How does replication Controller works?
+- Similar for Replicaset yaml explain each yaml configuration with the questions which are asked in interviews and the concepts that i should be aware of. what will happen if labels are different. There are a lot of questions in this take each one.
+- How does Replicaset works?
+- Let's suppose we have applied on replicaset file and 5 pods are running all of them would have same configurations except name, if one of them is deleted then that would be automatically created. 
+- How do we know that a particular pod is under which resource (Replicaset), so while doing kubectl get pod pod-name -oyaml, if in the yaml there is something present in ownerReferences section then it is under that resource. otherwise it is free to use.
+- How to run heterogeneous replicas, for e.g. we want 3 pod, 2 with nginx image and 1 with redis image then we can run a pod with label as release:alpha1.1 with redis image and then run the replicaset yaml with replicaset number = 3 and label as release=alpha1.1 then it will acquire that redis pod and create two new pods with tag as release=alpha1.1, we can verify this by seeing redis pod yaml for ownerReference section.
+
+- How does that downgrade and upgrade happen:
+When scaling down, the ReplicaSet controller chooses which pods to delete by sorting the available pods to prioritize scaling down pods based on the following general algorithm:
+1. Pending (and unschedulable) pods are scaled down first.
+2. If controller.kubernetes.io/pod-deletion-cost annotation is set, then the pod with the lower value will come first.
+3. Pods on nodes with more replicas come before pods on nodes with fewer replicas.
+4. If the pods' creation times differ, the pod that was created more recently comes before the older pod (the creation times are bucketed on an integer log scale when the LogarithmicScaleDown feature gate is enabled).
+
+- kubectl get pods --show-labels
+
+## Annotation
+- kubectl annotate pod label-demo maintainer='prerit@kubcloud.tech'
+- What is annotation mean in Kubernetes. what i know is that, annotations are used to put some information about the resource that we have created.
+- questions from this topic and other things that i need to know about this topic.
+
+## Stateful set: To deploy pods in an organized manner
+
+## Deployments: Under the hood replica sets are used, An abstraction above pods which can create and maintainer any number of pods always running.
+
+## SLA (Service level agreement): Availability status, Less downtime more availability. more downtime less availability more application downtime more business loss.
+
+## rollout-deplyment
+- kubectl rollout history deploy rollout-demo
+- kubectl set image deploy rollout-demo nginx=nginx:latest
+- kubectl rollout history deploy rollout-demo
+- kubectl rollback undo deploy rollout-demo --to-version=1
+- kubectl get pods
+- We use command line for CKA only in company we make change directly in yaml so that yaml is always updated.
+
+
+
+
+
+
+
+
+
+
