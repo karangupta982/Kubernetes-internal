@@ -94,6 +94,21 @@ Sabse zyada practice Troubleshooting + Cluster Architecture par karo — ye 55% 
 64. Ingress needs an Ingress Controller running — the Ingress object alone does nothing
 65. Egress uses SNAT at the node level to make pod traffic internet-routable
 66. Kubernetes Networking Model's 3 guarantees: no-NAT pod-to-pod, no-NAT node-to-pod, consistent self/external IP view
+67. imagePullPolicy — Always/IfNotPresent/Never; latest tag → Always by default
+68. securityContext — runAsNonRoot, readOnlyRootFilesystem, capabilities drop/add
+69. Liveness restarts on fail; Readiness removes from endpoint on fail; Startup
+    protects slow starters
+70. QoS classes: BestEffort (evicted first) → Burstable → Guaranteed (evicted last)
+71. Label selector is mandatory and must match template labels in RS/RC
+72. ownerReferences field = pod ka "parent" resource, khaali = free/bare pod
+73. kubectl rollout undo (NOT kubectl rollback — ye command exist nahi karta)
+74. Rollback to specific version: --to-revision=N (N becomes latest revision number)
+75. Deployment internally manages multiple ReplicaSets — old ones kept for rollback history
+76. RollingUpdate strategy: maxUnavailable + maxSurge control rollout speed/safety
+77. StatefulSet: ordered startup, stable network identity, dedicated PVC per pod
+78. kubectl rollout pause/resume — mid-rollout control
+79. kubectl rollout restart — recreate pods without image change
+80. terminationGracePeriodSeconds: 30 — SIGTERM → 30s → SIGKILL
 
 ---
 
