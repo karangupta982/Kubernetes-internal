@@ -1,3 +1,832 @@
+# Lecture 5 — Labels, Selectors, ReplicaSets, Deployments, Rollouts
+
+---
+
+## 1. Pod YAML — complete field-by-field explanation
+
+Tumhara YAML output real cluster se aaya hai — isko reference document ki tarah treat karo. Har important field ka exact meaning explain karta hoon.
+
+```
+## 1.1 metadata section
+
+name: day5pod1          → Pod ka unique naam us namespace ke andar
+namespace: default      → kis namespace mein hai
+labels:
+  run: day5pod1         → DEFAULT LABEL: jab tum kubectl run karte ho
+                          bina --labels flag ke, Kubernetes automatically
+                          ek label lagate hai: key="run", value=pod-naam
+
+uid: 02d5e443-...       → Globally unique identifier — IMMUTABLE, kabhi
+                          change nahi hota chahe pod update ho jaye.
+                          Agar pod delete aur recreate ho, NAYA uid milta hai.
+
+resourceVersion: "610"  → Har baar jab bhi ye object etcd mein update
+                          hota hai, ye number badh jata hai. Optimistic
+                          concurrency ke liye use hota hai — agar do
+                          clients simultaneously same object update karne
+                          ki koshish karein, server check karta hai ki
+                          "tumhara resourceVersion match karta hai current
+                          se? Nahi? To tumhara update stale hai, reject."
+
+creationTimestamp       → Kubernetes ka har object apna creation time
+                          track karta hai — debugging ke liye useful.
+
+generation: 1           → Spec-level changes track karta hai. Har baar
+                          spec change hone par ye badhta hai. Status
+                          section mein "observedGeneration" se compare
+                          karke pata chalta hai ki controller ne latest
+                          spec process ki ya nahi.
+
+## 1.2 spec section — "DESIRED STATE yahaan likha hai"
+
+### imagePullPolicy (tumne flag kiya tha — yahan full answer)
+
+imagePullPolicy: Always → Har baar pod start hone par registry se image
+                          PULL karo, chahe node par already ho.
+
+3 possible values:
+- Always:     Har baar pull karo. "latest" tag wale images ke liye ya
+              CI/CD pipelines mein jahan image frequently update hoti hai.
+- IfNotPresent: Sirf pull karo agar node par image already nahi hai.
+                Production stable images ke liye (faster pod startup).
+- Never:       Kabhi pull mat karo — image already node par honi chahiye.
+               Edge/air-gapped environments ke liye.
+
+IMPORTANT GOTCHA (exam-relevant): Agar tum "nginx" likhte ho bina tag ke,
+Kubernetes ise "nginx:latest" maanta hai aur imagePullPolicy AUTOMATICALLY
+"Always" ho jata hai. Agar tum "nginx:1.25.0" likhte ho (specific tag),
+default "IfNotPresent" hota hai. Ye default behavior interview mein pucha
+jaata hai.
+
+### Private registry se image pull karna (tumne flag kiya tha)
+
+Steps:
+1. Docker registry ka credentials se Secret banao:
+   kubectl create secret docker-registry regcred \
+     --docker-server=<registry-url> \
+     --docker-username=<username> \
+     --docker-password=<password> \
+     --docker-email=<email>
+
+2. Pod spec mein imagePullSecrets reference karo:
+   spec:
+     containers:
+     - image: private-registry.io/myapp:latest
+       name: myapp
+     imagePullSecrets:
+     - name: regcred
+
+Kubernetes kubelet is Secret ko padh kar registry authenticate karta hai
+image pull karne se pehle.
+
+### schedulerName: default-scheduler
+
+Tumne note kiya: "scheduler ke naam ke liye spec check karo" — sahi hai.
+
+```yaml
+spec:
+  schedulerName: default-scheduler
+```
+
+CUSTOM SCHEDULER — tumne pucha tha: "Kya hum scheduler tweak kar sakte hain?"
+
+Haan — MULTIPLE ways:
+
+WAY 1 — Custom Scheduler deploy karna:
+Tum apna khud ka scheduler binary likh sakte ho ya existing custom
+schedulers use kar sakte ho (jaise scheduler-plugins project). Pod mein
+`schedulerName: my-custom-scheduler` specify karte ho — wo pod sirf tab
+schedule hoga jab tumhara custom scheduler running hoga.
+
+WAY 2 — Scheduler profiles (configuration):
+Default scheduler bahut configurable hai — plugins enable/disable kar
+sakte ho, scoring behavior tweak kar sakte ho /etc/kubernetes/manifests/
+kube-scheduler.yaml mein configuration file se.
+
+WAY 3 — Directly: Taints/Tolerations aur Node Affinity se scheduler
+ke DEFAULT DECISIONS ko influence karte ho bina scheduler replace kiye.
+
+Interview answer: "Kubernetes allows multiple schedulers to coexist —
+you can write a completely custom scheduler binary and deploy it as a
+pod, then reference it by name in pod specs. Alternatively, the default
+scheduler is highly configurable via scheduler profiles, letting you
+enable or disable specific scoring and filtering plugins without
+replacing the scheduler itself."
+
+### securityContext: {} (tumne flag kiya — yahan full explanation)
+
+securityContext ke 2 levels hain (important distinction):
+
+POD-LEVEL securityContext (spec.securityContext):
+  Sare containers par apply hota hai.
+  
+CONTAINER-LEVEL securityContext (spec.containers[].securityContext):
+  Sirf us ek container par apply hota hai, pod-level override karta hai.
+
+Common fields jo production mein use hote hain:
+```yaml
+securityContext:
+  runAsNonRoot: true        # container root user se na chale (security best practice)
+  runAsUser: 1000           # specific UID se container run karo
+  runAsGroup: 3000          # specific GID
+  readOnlyRootFilesystem: true  # container ka filesystem read-only karo
+  allowPrivilegeEscalation: false  # container apne privileges escalate na kar sake
+  capabilities:
+    drop: ["ALL"]           # sari Linux capabilities hata do by default
+    add: ["NET_ADMIN"]      # sirf zaroori capabilities add karo
+```
+
+Tumhara point sahi hai: cloud clusters mein securityContext enforce
+karna security best practice hai. Agar koi attacker container mein
+ghus jaye aur securityContext strict na ho:
+- Root se run ho raha hai → root-level damage ho sakta hai
+- Filesystem writable → malicious files likh sakta hai
+- Capabilities available → network sniff kar sakta hai, kernel calls
+  
+CKS exam mein ye BAHUT heavily tested hai. CKA mein conceptually
+important hai.
+
+### Probes — tumne flag kiya, 3 types explain karta hoon
+
+```yaml
+livenessProbe:          # "Container ALIVE hai?" 
+                        # FAIL hone par: container RESTART hota hai
+                        # Use case: deadlock detect karna (app responsive
+                        # nahi hai lekin crash bhi nahi hua)
+
+readinessProbe:         # "Container TRAFFIC receive karne ke liye READY hai?"
+                        # FAIL hone par: Service is pod ko ENDPOINTS se
+                        # HATA deti hai (traffic nahi milta, restart nahi hota)
+                        # Use case: app startup mein time lagta hai
+                        # (DB connection establish hone tak traffic mat do)
+
+startupProbe:           # "Container PEHLI BAAR SHURU hua kya?"
+                        # Slow-starting apps ke liye — jab tak startupProbe
+                        # pass na ho, liveness/readiness probes disabled rehte hain
+                        # Use case: legacy apps jo start hone mein 2-3 min lete hain
+```
+
+Teen types of probe mechanisms:
+```yaml
+httpGet:    # HTTP GET request bhejo, 2xx/3xx = success
+  path: /healthz
+  port: 8080
+
+tcpSocket:  # TCP connection try karo, connection open = success
+  port: 8080
+
+exec:       # Command run karo container ke andar, exit code 0 = success
+  command: ["cat", "/tmp/healthy"]
+```
+
+Interview one-liner: "Liveness restarts the container on failure,
+readiness removes it from the service endpoint on failure — they
+solve different problems. Startup probe protects slow-starting
+containers from being killed by liveness before they finish initializing."
+
+### Pod conditions (status.conditions) — 4 types explain karte hain
+
+Tumne note kiya: "types: Initialized, Ready, ContainerReady, PodScheduled"
+
+```
+PodScheduled:        → Scheduler ne node assign kar diya hai ✓
+Initialized:         → Saare init containers successfully complete ho gaye ✓
+ContainersReady:     → Saare containers individually ready hain ✓
+Ready:               → Pod traffic receive kar sakta hai (readinessProbe
+                        pass, init containers done, sab containers ready) ✓
+
+Order: PodScheduled → Initialized → ContainersReady → Ready
+Jab tak Ready "True" na ho, Service is Pod ko endpoints mein
+ADD NAHI KARTA — ek super important fact jो CKA mein kaam aata hai.
+```
+
+### terminationGracePeriodSeconds: 30
+
+```
+Jab pod delete hota hai, Kubernetes pehle SIGTERM bhejta hai container
+process ko. Process ko 30 seconds milte hain gracefully shutdown karne ke
+liye (ongoing requests complete karo, connections close karo). 30 seconds
+ke baad bhi process alive hai → SIGKILL → force kill.
+
+Production best practice: apni app SIGTERM handle kare aur gracefully
+shutdown kare. Nahi to requests mid-flight khatam ho jayenge.
+```
+
+### tolerations in your YAML — explain karte hain
+
+```yaml
+tolerations:
+- effect: NoExecute
+  key: node.kubernetes.io/not-ready
+  operator: Exists
+  tolerationSeconds: 300
+- effect: NoExecute
+  key: node.kubernetes.io/unreachable
+  operator: Exists
+  tolerationSeconds: 300
+```
+
+YE AUTOMATICALLY ADD HOTE HAIN tumhare har pod mein (system-added
+default tolerations). Meaning:
+- Agar node "not-ready" ya "unreachable" ho jaye, pod 300 seconds
+  (5 minutes) tak wait karega before eviction — taaki temporary
+  network blip par immediately pods evict na ho jayein.
+- Tum is value ko change kar sakte ho (zyada fast eviction chahiye
+  to 30s, zyada patient rehna hai to zyada).
+
+### serviceAccount: default
+
+Har pod ek ServiceAccount ke naam se run karta hai. Default ServiceAccount
+automatically every pod ko mount hota hai ek token ke roop mein:
+`/var/run/secrets/kubernetes.io/serviceaccount/token`
+
+Ye token pod ko api-server se baat karne ki permission deta hai (limited
+RBAC permissions ke saath). Production mein ye default token often
+`automountServiceAccountToken: false` karke disable karte hain kyunki
+zyada zaroori nahi hota aur attack surface reduce hota hai.
+
+### QoS Class: BestEffort (status mein)
+
+Kubernetes teen QoS classes define karta hai resource management ke liye:
+
+BestEffort: Koi resources.requests ya resources.limits specify nahi kiya
+  → Sabse PEHLE kill hoga agar node par memory pressure aaye
+
+Burstable: requests specify ki hain lekin limits se kam
+  → Middle priority
+
+Guaranteed: requests == limits (dono equal aur dono specified)
+  → LAST MEIN kill hoga, highest priority
+
+Interview: "QoS class determines eviction priority under node memory
+pressure — Guaranteed pods are last to be evicted, BestEffort first.
+It's automatically assigned by Kubernetes based on whether you set
+resource requests and limits."
+
+### restartCount
+
+Tumne sahi note kiya: "kitni baar pod down aur up hua."
+`restartCount: 0` — ye pod kabhi crash nahi hua.
+High restartCount = CrashLoopBackOff pattern → `kubectl logs --previous`
+se last crash ka log dekho.
+
+### hostIP vs podIP
+
+```
+hostIP: 172.19.0.2   → Node ka IP (physical machine)
+podIP:  10.244.0.5   → Pod ka IP (virtual, CNI se assigned)
+```
+
+Ye exactly Lecture 3 wala concept confirm karta hai — Pod ka IP aur
+Node ka IP ALAG ALAG hote hain, do different networks.
+```
+
+---
+
+## 2. Labels — full depth
+
+```
+## 2.1 Labels kya hain exactly
+
+Key-value pairs jo Kubernetes OBJECTS par lagaye jaate hain — sirf
+metadata/identification ke liye (koi behavior change nahi karte khud
+se). SELECTORS unhe use karke objects FILTER/SELECT karte hain.
+
+Valid key format: [prefix/]name
+- Prefix optional (max 253 chars, DNS subdomain format)
+- Name required (max 63 chars, alphanumeric, -, _, .)
+- Example: "app.kubernetes.io/version: 1.2.0" (prefix wala)
+           "environment: staging" (simple)
+
+## 2.2 Default label behavior (tumne sahi note kiya)
+
+kubectl run day5pod1 --image=nginx
+→ automatically label lagte hain: run=day5pod1
+kubectl run any-name --image=nginx
+→ run=any-name
+
+## 2.3 Label commands — all variants
+
+kubectl get pods --show-labels             # saare labels dikhao
+kubectl get pods -l environment=staging    # specific label se filter
+kubectl get pods -l release=alpha1.1       # 
+kubectl get pods -l run!=pod5             # NOT equal filter
+kubectl get pods -l 'tier in (frontend,backend)'  # multiple values
+kubectl get pods -l 'tier notin (db)'     # notin filter
+
+# Label add karo existing pod par
+kubectl label pod label-demo work=tut
+
+# Label UPDATE karo (agar pehle se exist karta hai, overwrite zaroori)
+kubectl label pod label-demo work=production --overwrite
+
+# Label REMOVE karo (key ke baad minus sign)
+kubectl label pod label-demo work-
+
+# Multiple pods par ek saath label — label selector use karke
+kubectl label pod -l release=alpha1.1 work=tut
+
+## 2.4 Spec change karne par kya hota hai (tumne note kiya — clarify karte hain)
+
+Ye CRITICAL point hai jise most log confuse karte hain.
+
+METADATA level change (labels, annotations, name change except certain fields):
+  → Object IN-PLACE UPDATE hota hai, pod RECREATE NAHI hota
+  → Existing running container affected nahi hota
+
+SPEC level change (image, resources, ports, env vars, volumes, etc.):
+  → SIRF DELETE + RECREATE se change hota hai (bare pod ke liye)
+  → kubectl edit pod se spec change karo → pod ko delete + create karna
+    padega manually (bare pod mein controller nahi hota jo auto-recreate kare)
+  → Deployment ke andar wale pods ke liye → rolling update automatically
+    hota hai (ISLIYE DEPLOYMENT USE KARTE HAIN bare pod ke jagah)
+
+Interview answer: "Pod spec is largely immutable after creation —
+fields like the container image, resource requests, and volumes cannot
+be changed in-place. This is why Deployments exist: they manage the
+rolling replacement of pods when spec changes rather than requiring
+manual delete-and-recreate."
+
+## 2.5 Labels vs Annotations vs Selectors — important distinction
+
+LABELS:
+  - Key-value pairs on objects
+  - SELECTORS use kar sakte hain unhe query/filter karne ke liye
+  - Kubernetes INTERNALLY bhi use karta hai (ReplicaSet apne pods
+    dhundhta hai labels se, Service apne endpoints dhundhta hai
+    labels se)
+  - Short, simple values
+
+ANNOTATIONS:
+  - Key-value pairs on objects (SAME format as labels)
+  - SELECTORS use NAHI kar sakte (queryable nahi, indexable nahi)
+  - Arbitrary metadata ke liye — longer, non-identifying information
+  - Kubernetes internally use karta hai: last-applied-configuration,
+    change-cause, etc.
+  - External tools bhi use karte hain: Prometheus scraping config,
+    Ingress controller nginx config, etc.
+
+SELECTORS:
+  - Labels ko QUERY karne ka mechanism hai
+  - Do types:
+    equality-based: environment=production, tier!=frontend
+    set-based: environment in (prod, staging), tier notin (db)
+```
+
+---
+
+## 3. Annotations — tumne flag kiya, full depth
+
+```
+## 3.1 Annotation add karna
+
+kubectl annotate pod label-demo maintainer='prerit@kubcloud.tech'
+kubectl annotate pod label-demo description='This is the main app pod'
+
+# Overwrite existing annotation
+kubectl annotate pod label-demo maintainer='new@email.com' --overwrite
+
+# Remove annotation
+kubectl annotate pod label-demo maintainer-
+
+# View annotations
+kubectl describe pod label-demo | grep -A5 Annotations
+kubectl get pod label-demo -o jsonpath='{.metadata.annotations}'
+
+## 3.2 Common annotations Kubernetes khud use karta hai
+
+kubectl.kubernetes.io/last-applied-configuration  → kubectl apply ka history
+kubernetes.io/change-cause                        → rollout ka reason track karna
+cluster-autoscaler.kubernetes.io/safe-to-evict   → "false" means autoscaler
+                                                    is pod ko evict na kare
+prometheus.io/scrape: "true"                      → Prometheus ko metrics
+                                                    scrape karne ka signal
+
+## 3.3 Interview answer
+
+Q: "Label aur Annotation mein kya fark hai?"
+
+A: "Labels are identifying metadata that Kubernetes uses internally to
+group and select objects — Services use label selectors to find their
+backing pods, ReplicaSets use them to track their pods. Annotations
+are non-identifying metadata for tooling and humans — they cannot be
+used in selectors and are not indexed for efficient querying. Labels
+should be stable identifying attributes like app name, version, or
+environment; annotations should hold operational information like build
+metadata, monitoring config, or the last-applied configuration."
+```
+
+---
+
+## 4. ReplicationController vs ReplicaSet — complete deep explanation
+
+### 4.1 ReplicationController YAML — field by field
+
+```yaml
+apiVersion: v1
+kind: ReplicationController       # v1 API — ye purana hai
+metadata:
+  name: nginx-rc
+spec:
+  replicas: 3                     # kitne pods chahiye hamesha
+  selector:                       # "Mujhe aise pods dhundho"
+    app: nginx                    # SIRF equality-based selector support
+                                  # karta hai RC (set-based nahi)
+  template:                       # "Naya pod kaise banao" (agar koi missing ho)
+    metadata:
+      labels:
+        app: nginx                # YE LABEL SELECTOR SE MATCH KARNA CHAHIYE
+                                  # (MANDATORY — warna infinite loop mein
+                                  # RC kuch select nahi karega aur pod
+                                  # create karta rahega)
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+```
+
+### 4.2 ReplicaSet YAML — field by field with all interview questions
+
+```yaml
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: nginx-rs
+spec:
+  replicas: 3
+  selector:
+    matchLabels:                  # Equality-based: YE LABELS wale pods select karo
+      app: nginx
+    matchExpressions:             # Set-based (RC mein ye nahi tha — key difference)
+    - key: tier
+      operator: In               # In, NotIn, Exists, DoesNotExist
+      values:
+      - frontend
+  template:
+    metadata:
+      labels:
+        app: nginx               # selector ke saath MATCH KARNA CHAHIYE
+        tier: frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+```
+
+### 4.3 SELECTOR kyu hai? — interview mein specifically pucha jaata hai
+
+```
+SELECTOR ka purpose: ReplicaSet ko EXISTING pods ko IDENTIFY karna hai,
+na ki sirf naye banane ke liye.
+
+Flow:
+1. RS banaya gaya, spec.replicas = 3
+2. RS controller API server se puchta hai: "Mujhe wo sare pods do
+   jinke labels 'app=nginx' hain"
+3. Maan lo 1 pod already exist karta hai us label ke saath
+4. RS controller: "1 hai, mujhe 2 chahiye → 2 aur banata hoon"
+5. Total 3 ho gaye, RS satisfied
+
+Agar SELECTOR TEMPLATE LABELS SE MATCH NAHI KARTA:
+RS ban jayega, controller pods dhundhega, koi nahi milega (because
+template labels alag hain), infinite pods banata rahega kyuki existing
+pods kabhi "match" nahi karte. YE VALIDATION ERROR PREVENT KARNE KE
+LIYE Kubernetes REQUIRE KARTA HAI ki template labels selector se match
+karein.
+
+Interview answer: "The selector is how the ReplicaSet identifies which
+pods it owns and manages. It's separate from the template so that the
+controller can discover pre-existing pods with matching labels and
+'adopt' them rather than always creating fresh ones. This is also what
+enables the heterogeneous pod scenario — a pre-existing pod with
+matching labels gets adopted by the ReplicaSet."
+```
+
+### 4.4 ReplicaSet — HOW IT WORKS (mechanism)
+
+```
+RECONCILIATION LOOP (Lecture 2 wala concept yaad karo):
+
+LOOP FOREVER:
+  current = count of pods matching spec.selector
+  desired = spec.replicas
+  
+  if current < desired:
+    create (desired - current) new pods using spec.template
+  elif current > desired:
+    delete (current - desired) pods (deletion priority algorithm use karta hai)
+  else:
+    kuch nahi karo (desired state reached)
+  
+  sleep briefly, repeat
+
+YE WATCH-BASED HAI, polling-based nahi:
+API server se "watch" connection open hota hai — jaise hi koi matching
+pod delete ya create hota hai, controller IMMEDIATELY respond karta hai
+(milliseconds mein). Isliye jab tum pod delete karte ho, almost instantly
+naya pod create ho jata hai.
+```
+
+### 4.5 ownerReferences — pod kis resource ke "under" hai
+
+```
+kubectl get pod <pod-name> -o yaml | grep -A5 ownerReferences
+
+Output:
+ownerReferences:
+- apiVersion: apps/v1
+  blockOwnerDeletion: true
+  controller: true
+  kind: ReplicaSet          # ← ye pod kis resource ka hai
+  name: nginx-rs            # ← us resource ka naam
+  uid: abc123...
+
+Agar ownerReferences khaali hai → pod "free" hai, koi controller
+manage nahi kar raha ise (bare pod).
+
+IMPORTANT: Agar ReplicaSet DELETE karo → iske saare owned pods bhi
+automatically DELETE ho jaate hain (cascading deletion). Ye
+ownerReferences ki wajah se hota hai — Kubernetes knows "ye pod is
+RS ke child hai."
+```
+
+### 4.6 Heterogeneous pods — tumhara scenario exactly, with mechanism
+
+```
+Scenario: 3 replicas chahiye, 2 nginx + 1 redis, selector: app=myapp
+
+Step 1: Redis pod manually banao matching label ke saath:
+kubectl run redis-pod --image=redis --labels=app=myapp
+
+Step 2: ReplicaSet apply karo (replicas: 3, selector: app=myapp,
+  template: nginx image with label app=myapp):
+kubectl apply -f rs.yaml
+
+Step 3: RS controller check karta hai: "app=myapp label se kitne pods?"
+  → 1 pod already milta hai (redis wala) — ADOPT kar leta hai
+  → 2 aur banata hai using template (nginx image se)
+  → Total: 1 redis + 2 nginx = 3 pods, sab selector se match karte hain
+
+Verify karo: kubectl get pod redis-pod -o yaml | grep -A5 ownerReferences
+  → ownerReferences mein ReplicaSet ka naam dikhega
+
+INTERVIEW GOTCHA: "Agar ReplicaSet delete hua to redis pod bhi delete
+  ho jayega — kyuki ab wo RS ke owner ke under hai." Ye important
+  side effect hai jisme log trap hote hain production mein.
+```
+
+### 4.7 Scale down deletion priority — confirmed correct, one addition
+
+Tumhara algorithm sahi hai, official docs confirm karte hain. Ek addition jo tumne miss kiya: "if all of the above match, then selection is random."
+
+```
+OFFICIAL ORDER (memorize karo, interview mein directly pucha jaata hai):
+1. Pending/Unschedulable pods pehle
+2. pod-deletion-cost annotation se (lower cost pehle)
+3. Jis node par zyada replicas hain us node ka pod pehle (LOAD BALANCING
+   preserve karne ke liye — across-node distribution maintain hoti hai)
+4. Naya pod purane se pehle (LIFO — Last In First Out)
+5. Agar sab match → RANDOM
+
+WHY DOES THIS ORDER MATTER (interview follow-up):
+Rule 3 (more replicas node pe → delete pehle) ensure karta hai ki
+scale down ke baad bhi pods MULTIPLE NODES par distributed rahein,
+single node pe sab pods congregate na ho jayein — fault tolerance
+maintain hoti hai.
+```
+
+### 4.8 RC vs RS — key difference table
+
+```
+| Feature              | ReplicationController | ReplicaSet |
+|----------------------|----------------------|------------|
+| API Version          | v1 (legacy)          | apps/v1 (current) |
+| Selector types       | Equality only        | Equality + Set-based |
+| Used directly?       | NEVER (deprecated)   | Rarely (Deployment use karo) |
+| Managed by           | Nothing (standalone) | Deployment |
+| matchExpressions?    | No                   | Yes |
+```
+
+---
+
+## 5. Deployments — under the hood
+
+```
+## 5.1 Why Deployment? (RS se better kyu hai)
+
+ReplicaSet khud ONLY "N replicas running rakho" guarantee karta hai.
+Agar tum image update karna chahte ho, RS tumhe MANUALLY:
+  1. Old RS ka image update karna padta
+  2. Old pods delete karne padte
+  3. Naye pods create karne padte
+
+Deployment ye sab AUTOMATICALLY karta hai ek defined strategy ke saath.
+
+## 5.2 How Deployment works internally (under the hood)
+
+Deployment → creates/manages → ReplicaSet(s) → creates/manages → Pods
+
+Har rollout (image/spec change) par:
+- Deployment ek NAYA ReplicaSet create karta hai (naye spec ke saath)
+- Old RS ko SCALE DOWN karta hai (0 tak)
+- New RS ko SCALE UP karta hai (desired count tak)
+- Old RS DELETE NAHI HOTA — woh "revision history" ke liye KEEP hota hai
+  (rollback ke liye kaam aata hai — isliye `kubectl rollout undo` possible hai)
+
+Verify karo:
+kubectl get rs                    # multiple RS dikhenge — ek current, purane wale
+kubectl get rs -o wide            # SELECTOR column mein "pod-template-hash" dikhega
+
+pod-template-hash: Deployment har naye RS ko ek unique hash assign
+karta hai jo pod template ke content se generate hota hai. Isliye
+same-spec rollout same RS reuse karta hai.
+
+## 5.3 SLA aur Deployment ka connection (tumne note kiya)
+
+SLA = Service Level Agreement = "kitna uptime guarantee hai"
+
+99.9% uptime   = 8.7 hours downtime/year (acceptable for many)
+99.99% uptime  = 52 minutes downtime/year (high availability)
+99.999% uptime = 5 minutes downtime/year (five nines — very hard)
+
+Deployment ROLLING UPDATE strategy ensure karta hai ki update ke dauraan
+KUCH PODS HAMESHA RUNNING RAHEIN — isliye zero-downtime deployment possible
+hai → higher SLA achieve hoti hai.
+
+2 key parameters:
+maxUnavailable: maximum kitne pods update ke dauraan unavailable ho
+  sakte hain (default: 25% of desired)
+maxSurge: update ke dauraan desired se EXTRA kitne pods temporarily
+  run kar sakte hain (default: 25% of desired)
+
+Example: replicas: 4, maxUnavailable: 1, maxSurge: 1
+  → Update ke dauraan minimum 3 pods hamesha running
+  → Maximum 5 pods temporarily (4 + 1 surge)
+  → Ek-ek pod replace hota hai = rolling update
+```
+
+---
+
+## 6. Deployment Strategies — complete
+
+```
+## Strategy 1: RollingUpdate (DEFAULT)
+
+Gradual replacement — ek ek pod replace karta hai.
+```yaml
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+```
+Pros: Zero downtime, traffic hamesha serve hota hai
+Cons: Update ke dauraan 2 versions simultaneously run karte hain
+  (v1 aur v2 dono) — agar breaking changes hain to issue ho sakta hai
+
+## Strategy 2: Recreate
+
+Pehle SAARE old pods delete karo, phir saare naye pods banao.
+```yaml
+spec:
+  strategy:
+    type: Recreate
+```
+Pros: Kabhi 2 versions simultaneously run nahi karte
+Cons: DOWNTIME HOTA HAI (old pods down, new pods start hone tak gap)
+Use case: Database migrations jahan old+new simultaneously run karna
+  dangerous ho
+
+## Strategy 3: Canary Deployment (Kubernetes native, manual)
+Full topic for later, but basic idea:
+- 2 Deployments simultaneously: main (90% replicas) + canary (10% replicas)
+- Service dono ko select karti hai (same label, different version)
+- 10% traffic canary par jata hai, issues monitor karo
+- Sab theek? Main deployment bhi update karo
+
+## Strategy 4: Blue-Green Deployment (Kubernetes native)
+- "Blue" = current production Deployment
+- "Green" = new version Deployment (same size)
+- Dono simultaneously run karte hain
+- Service selector switch karo (blue → green) — INSTANT switch
+- Rollback: Service selector wapas switch karo (green → blue)
+Cost: Double resources during transition
+```
+
+---
+
+## 7. Rollout Commands — CORRECTED (tumhare notes mein typo tha)
+
+```bash
+## ⚠️ CORRECTION: "kubectl rollback" EXIST NAHI KARTA
+## Tumhare notes mein "kubectl rollback undo" likha hai — YE WRONG HAI
+## Correct command: "kubectl rollout undo"
+
+## FULL ROLLOUT WORKFLOW (exam mein exact sequence yaad karo):
+
+# Step 1: Deployment banao
+kubectl create deployment rollout-demo --image=nginx:1.25
+
+# Step 2: Change-cause annotate karo (history meaningful banane ke liye)
+kubectl annotate deployment rollout-demo kubernetes.io/change-cause="Initial deploy nginx 1.25"
+
+# Step 3: Image update karo
+kubectl set image deployment/rollout-demo nginx=nginx:1.26
+
+# Step 4: Cause annotate karo
+kubectl annotate deployment rollout-demo kubernetes.io/change-cause="Update to nginx 1.26" --overwrite
+
+# Step 5: Rollout status check karo (real-time progress)
+kubectl rollout status deployment/rollout-demo
+
+# Step 6: History dekho
+kubectl rollout history deployment/rollout-demo
+# Output:
+# REVISION  CHANGE-CAUSE
+# 1         Initial deploy nginx 1.25
+# 2         Update to nginx 1.26
+
+# Step 7: Specific revision ka detail dekho
+kubectl rollout history deployment/rollout-demo --revision=1
+
+# Step 8: Rollback karo (previous revision par)
+kubectl rollout undo deployment/rollout-demo
+
+# Step 9: Specific revision par rollback karo
+kubectl rollout undo deployment/rollout-demo --to-revision=1
+
+# Step 10: Rollback ke baad history dekho — IMPORTANT BEHAVIOR
+kubectl rollout history deployment/rollout-demo
+# Output:
+# REVISION  CHANGE-CAUSE
+# 2         Update to nginx 1.26
+# 3         Initial deploy nginx 1.25   ← REVISION 1 AB 3 BAN GAYA!
+# 
+# Ye gotcha hai: rollback revision number PROMOTE karta hai, DELETE
+# nahi karta. Old revision wapas AATA HAI lekin ab highest number
+# ke saath. Revision 1 "gone" nahi hua — wo revision 3 ban gaya.
+
+# Pause/Resume (tumhare notes mein nahi tha — exam mein aata hai)
+kubectl rollout pause deployment/rollout-demo   # update temporarily rok do
+kubectl rollout resume deployment/rollout-demo  # resume karo
+
+# Restart (pods recreate karo bina image change kiye — ConfigMap update ke baad)
+kubectl rollout restart deployment/rollout-demo
+
+## StatefulSet — tumne flag kiya "organized manner" — brief explanation
+
+StatefulSet ReplicaSet ka alternative hai jab pods ka ORDER aur IDENTITY
+matter karta hai:
+
+1. ORDERED STARTUP: pod-0 pehle ready hota hai, phir pod-1, phir pod-2
+   (RS mein sab parallel banate hain)
+2. STABLE NETWORK IDENTITY: pod names predictable hain (myapp-0, myapp-1)
+   aur DNS names stable rehte hain (myapp-0.myapp.default.svc.cluster.local)
+3. STABLE STORAGE: Har pod ka apna DEDICATED PVC hota hai jo pod delete/
+   recreate pe bhi PRESERVE hota hai
+
+Use case: Databases (MySQL, PostgreSQL, MongoDB) jahan har instance ka
+  apna data storage chahiye aur order matter karta hai (primary/replica setup)
+
+Interview: "ReplicaSet is for stateless workloads where any pod is
+interchangeable. StatefulSet is for stateful workloads where each pod
+has a unique identity, ordered deployment, and stable dedicated storage
+that persists across pod restarts."
+
+## Production note (tumne sahi observe kiya)
+
+"Company mein YAML mein directly change karte hain, CLI ke liye sirf
+exam/quick debug."
+
+GitOps principle: YAML file hi "source of truth" hai. CLI se change
+karne par YAML update nahi hota → drift aata hai → next deployment par
+tera change overwrite ho sakta hai. Isliye proper workflow:
+1. YAML mein change karo (Git mein commit karo)
+2. kubectl apply -f (ya ArgoCD/Flux auto-apply karta hai)
+Kubernetes mein ye ESSENTIAL practice hai, hobby project mein nahi
+matter karta but company mein STRICT hona chahiye.
+```
+
+---
+
+Two honest notes on this lecture:
+
+**Your rollout command typo (`kubectl rollback` instead of `kubectl rollout undo`) is the most dangerous thing in these notes** — it will fail silently in an exam terminal and cost you a task. Fix it everywhere in your notes now.
+
+**The Deployment-manages-multiple-ReplicaSets concept is more important than most beginners realize.** Do this once on your KinD cluster: create a Deployment, update the image twice, then run `kubectl get rs` — you'll see 3 ReplicaSets, the old ones at 0 replicas. Then run `kubectl rollout undo` and watch the 0-replica RS scale back up. Seeing it happen once is worth more than reading about it ten times.
+
+
+
+
+
+
+
+
+---
+
 # Labels, Selectors, ReplicaSets, Deployments, Production Strategies
 
 - kubectl run day5 --image nginx
