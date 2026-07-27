@@ -109,6 +109,16 @@ Sabse zyada practice Troubleshooting + Cluster Architecture par karo — ye 55% 
 78. kubectl rollout pause/resume — mid-rollout control
 79. kubectl rollout restart — recreate pods without image change
 80. terminationGracePeriodSeconds: 30 — SIGTERM → 30s → SIGKILL
+81. A record = domain → IP direct mapping
+82. CNAME = domain → domain (chain) — cloud LB ke liye use karo
+83. Ingress = routing rules ka declaration, khud kuch nahi karta
+84. Ingress Controller = actual reverse proxy pod jo rules implement karta hai
+85. ingressClassName (spec field) = current standard, annotation deprecated
+86. IngressClass = cluster-scoped object jo controller ko represent karta hai
+87. Default IngressClass: ingressclass.kubernetes.io/is-default-class: "true"
+88. Ingress annotations = controller-specific config, non-portable
+89. pathType: Exact vs Prefix — Exact full match, Prefix subtree match
+90. SSL termination Ingress Controller par hoti hai, pods par nahi
 
 ---
 
