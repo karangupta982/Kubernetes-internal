@@ -119,6 +119,15 @@ Sabse zyada practice Troubleshooting + Cluster Architecture par karo — ye 55% 
 88. Ingress annotations = controller-specific config, non-portable
 89. pathType: Exact vs Prefix — Exact full match, Prefix subtree match
 90. SSL termination Ingress Controller par hoti hai, pods par nahi
+91. Gateway API 3 resources: GatewayClass (infra) → Gateway
+    (platform) → Route (app dev) — role-oriented split
+92. HTTPRoute, GRPCRoute stable; TCPRoute, UDPRoute experimental
+93. Traffic splitting built-in: backendRefs weight field, no annotations
+94. allowedRoutes field = Gateway API ka multi-tenancy mechanism
+95. Gateway API CRDs alag install karne padte hain — K8s mein bundled nahi
+96. Ingress "frozen" hai — naye features nahi aayenge official spec mein
+97. Ingress-NGINX deprecation 2026 planned — Gateway API migration zaroori
+98. GRPCRoute: gRPC service name + method name se routing possible
 
 ---
 
