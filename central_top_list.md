@@ -128,27 +128,33 @@ Sabse zyada practice Troubleshooting + Cluster Architecture par karo — ye 55% 
 96. Ingress "frozen" hai — naye features nahi aayenge official spec mein
 97. Ingress-NGINX deprecation 2026 planned — Gateway API migration zaroori
 98. GRPCRoute: gRPC service name + method name se routing possible
-99.  TLS = server identity confirm + encrypted channel
-100. mTLS = both client AND server identity confirm —
-     internal service-to-service ke liye
-101. Let's Encrypt = free CA, 90 day certs, ACME protocol
-102. HTTP-01 challenge = domain ownership verify karne ka tarika
-103. cert-manager = automatic certificate lifecycle management
-     Kubernetes mein
-104. ClusterIssuer = cluster-scoped CA reference (any namespace)
-     Issuer = namespace-scoped (same namespace only)
-105. Certificate resource → CertificateRequest (auto) → Secret
-     (tls.crt + tls.key)
-106. Ingress + cert-manager annotation = fully automated HTTPS
-107. Ingress behind debugging: HTTPS redirect, CORS, mixed content
-     — check browser dev tools + ingress controller logs
-108. LimitRange = per-pod resource cap in a namespace
-109. ResourceQuota = total namespace resource cap
-110. CPU = compressible (throttle), Memory = incompressible (OOMKill)
-111. Noisy Neighbour solution: namespace separation +
-     LimitRange + pod-level resource limits (3 layers)
-112. kubectl describe namespace → LimitRange aur ResourceQuota
-     information dikhta hai
+99.  TLS handshake 2 goals: server identity verify + session
+     key securely exchange → phir fast symmetric encryption
+100. TLS 1.3: 1 round trip (1.2 mein 2 tha), forward secrecy
+     mandatory (ECDHE), weak ciphers removed
+101. Certificate chain: Root CA → Intermediate CA → Server cert
+     Root CA offline rakha jaata hai — security reason
+102. mTLS: dono sides certificates present karte hain, shared
+     internal CA verify karta hai — service mesh ka foundation
+103. Zero Trust: "cluster ke andar = trusted" WRONG model
+     mTLS ensures even internal traffic is authenticated
+104. ACME protocol: RFC 8555 standard — Let's Encrypt implement karta hai
+105. HTTP-01 challenge: cert-manager automatically Pod + Service +
+     Ingress banata hai temporarily, cleanup bhi karta hai
+106. DNS-01 challenge: TXT record `_acme-challenge.domain.com`
+     Wildcard certs ke liye zaroori
+107. Let's Encrypt staging pehle use karo — production rate limits
+     strict hain (5 dup certs/week)
+108. CertificateRequest auto-created hai — manually banana nahi
+109. OOMKill = memory limit cross → process killed (incompressible)
+     CPU throttle = CPU limit cross → slow but alive (compressible)
+110. LimitRange = per pod/container cap
+     ResourceQuota = entire namespace total budget
+     DONO use karo production mein
+111. Ingress debug workflow: DevTools → controller logs →
+     exec inside pod → compare standalone vs ingress behavior
+112. Mixed content = HTTPS page pe HTTP resource → browser blocks
+     Fix: sab API calls HTTPS se karo
 ---
 
 ## 📌 Update Rule for this list
