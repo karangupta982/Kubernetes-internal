@@ -128,7 +128,27 @@ Sabse zyada practice Troubleshooting + Cluster Architecture par karo — ye 55% 
 96. Ingress "frozen" hai — naye features nahi aayenge official spec mein
 97. Ingress-NGINX deprecation 2026 planned — Gateway API migration zaroori
 98. GRPCRoute: gRPC service name + method name se routing possible
-
+99.  TLS = server identity confirm + encrypted channel
+100. mTLS = both client AND server identity confirm —
+     internal service-to-service ke liye
+101. Let's Encrypt = free CA, 90 day certs, ACME protocol
+102. HTTP-01 challenge = domain ownership verify karne ka tarika
+103. cert-manager = automatic certificate lifecycle management
+     Kubernetes mein
+104. ClusterIssuer = cluster-scoped CA reference (any namespace)
+     Issuer = namespace-scoped (same namespace only)
+105. Certificate resource → CertificateRequest (auto) → Secret
+     (tls.crt + tls.key)
+106. Ingress + cert-manager annotation = fully automated HTTPS
+107. Ingress behind debugging: HTTPS redirect, CORS, mixed content
+     — check browser dev tools + ingress controller logs
+108. LimitRange = per-pod resource cap in a namespace
+109. ResourceQuota = total namespace resource cap
+110. CPU = compressible (throttle), Memory = incompressible (OOMKill)
+111. Noisy Neighbour solution: namespace separation +
+     LimitRange + pod-level resource limits (3 layers)
+112. kubectl describe namespace → LimitRange aur ResourceQuota
+     information dikhta hai
 ---
 
 ## 📌 Update Rule for this list
