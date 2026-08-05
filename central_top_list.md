@@ -155,6 +155,38 @@ Sabse zyada practice Troubleshooting + Cluster Architecture par karo — ye 55% 
      exec inside pod → compare standalone vs ingress behavior
 112. Mixed content = HTTPS page pe HTTP resource → browser blocks
      Fix: sab API calls HTTPS se karo
+113. kube-node-lease mein Lease objects = NUMBER OF NODES
+     (pods nahi) — har node ka heartbeat mechanism
+114. Namespace nested nahi ho sakte — flat hierarchy only
+     (HNC ek addon hai, Kubernetes core nahi)
+115. Linux namespace (kernel isolation) ≠ Kubernetes namespace
+     (API-level label) — ye sirf same word hain different concepts ke
+116. CPU ki limit production mein kabhi define mat karo
+     (idle CPU waste hoga)
+117. Memory request == Memory limit hamesha rakho
+     (incompressible, OOM kill prevent karo)
+118. Guaranteed QoS = CPU + Memory dono ke req == limit
+     (LAST to be evicted)
+119. Taint = Node par "Do Not Enter" sign
+     Toleration = Permission to enter (NOT guarantee)
+120. Taint effects: NoSchedule (future only) | PreferNoSchedule
+     (soft) | NoExecute (evict existing too)
+121. nodeName = scheduler bypass karta hai (NEVER in production)
+122. nodeSelector = simple label match (equality only)
+     nodeAffinity = complex expressions (In, NotIn, Exists, etc.)
+123. requiredDuring = hard (Pending if fails) |
+     preferredDuring = soft (schedules anyway)
+124. "IgnoredDuringExecution" = running pod evict nahi hoga
+     rule change hone par
+125. Pod affinity = "Co-locate with pods having this label"
+     Pod anti-affinity = "Don't go where these pods are"
+126. topologyKey determines scope: hostname=node, zone=AZ level
+127. TopologySpreadConstraints > Anti-affinity for pod spreading
+     in 2026 (more expressive, performant)
+128. maxSkew = maximum imbalance allowed across topology domains
+129. OpenCost = per-namespace cost visibility tool (CNCF project)
+130. Namespace compliance cases: separate cluster use karo
+     (GDPR, HIPAA, PCI-DSS)**
 ---
 
 ## 📌 Update Rule for this list
