@@ -406,7 +406,7 @@ sudo systemctl restart kubelet       # Restart if it crashes or freezes
 ```
 B. Advanced Logging with journalctl
 Since kubelet runs natively on the host OS via systemd (not inside a container), you cannot run kubectl logs to debug it. You must use journalctl.
-kubectl logs to check the kubelet because kubectl relies on the kubelet itself to retrieve logs. If the kubelet is down, misconfigured, or experiencing errors, the communication chain required to execute the command breaks down completely. To understand why this happens, consider how kubectl logs works under the hood:
+You cannot use kubectl logs to check the kubelet because kubectl relies on the kubelet itself to retrieve logs. If the kubelet is down, misconfigured, or experiencing errors, the communication chain required to execute the command breaks down completely. To understand why this happens, consider how kubectl logs works under the hood:
 API Server Route: Your kubectl command talks to the Kubernetes API server.
 Kubelet Dependency: The API server contacts the kubelet on the specific node where the pod runs to fetch the log files.
 System Component: The kubelet is not a containerized pod managed by Kubernetes; it is a system daemon (service) running directly on the host operating system.Because kubectl can only query objects managed by the API server, it cannot query the system-level process that enables the API server to talk to the node in the first place.
