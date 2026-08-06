@@ -441,13 +441,13 @@ Current Version (2026): As of mid-2026, the Kubernetes community is tracking aro
 ## 5. YAML aur kubectl ka real connection (EXAM CRITICAL)
 
 Exam mein tum YAML haath se kam likhte ho, zyada generate karte ho:
-
+```ZSH
 kubectl run nginx --image=nginx --dry-run=client -o yaml > pod.yaml
 kubectl create deployment web --image=nginx --dry-run=client -o yaml > deploy.yaml
 
 --dry-run=client -o yaml ka matlab:
 "Object banao mat, sirf uska YAML mujhe dikhao"
-
+```
 Ye exam mein sabse zyada time bachane wala trick hai.
 Pura YAML haath se likhna time-waste hai jab kubectl already
 template generate kar sakta hai aur tum sirf edit karte ho.
