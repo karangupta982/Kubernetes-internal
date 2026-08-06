@@ -322,7 +322,7 @@ Literal Indicator (|): Preserves newlines and formatting exactly as written. (Cr
 
 Folded Indicator (>): Replaces newlines with spaces, converting a multi-line paragraph into a single long string.
 
-YAML
+```YAML
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -339,10 +339,12 @@ data:
     This is a very
     long sentence compiled
     into one line.
+
+```
 B. Anchors (&) and Aliases (*) for DRY (Don't Repeat Yourself)
 If you have repetitive blocks (like identical resource limits across multiple containers), you can use anchors to define a block and aliases to inject it.
 
-YAML
+```YAML
 # Define a reusable block using '&'    
 helpers: &resourceLimits
   resources:
@@ -356,7 +358,7 @@ spec:
       image: app:v1
       <<: *resourceLimits # Inject the block using '*' 
 
-
+```
 ### Anchor/Alias — kaise padhein is syntax ko (line by line)
 
 ```yaml
@@ -397,14 +399,15 @@ In a Kubernetes cluster, the kubelet daemon and your Container Runtime (containe
 
 The path configuration: Service configuration files are stored in /etc/systemd/system/ (not system etc).
 
-Bash
+```Bash
 # Critical CKA Commands to check if K8s is alive on a node:
 sudo systemctl status kubelet        # Check if kubelet is running
 sudo systemctl restart kubelet       # Restart if it crashes or freezes
+```
 B. Advanced Logging with journalctl
 Since kubelet runs natively on the host OS via systemd (not inside a container), you cannot run kubectl logs to debug it. You must use journalctl.
 
-Bash
+```Bash
 # View kubelet logs chronologically
 sudo journalctl -u kubelet
 
@@ -413,6 +416,9 @@ sudo journalctl -u kubelet -f
 
 # Filter out only error-level messages
 sudo journalctl -u kubelet -p err
+
+```
+
 C. Container Runtime Debugging (crictl vs docker)
 Modern Kubernetes clusters do not use Docker directly; they use lightweight runtimes via the Container Runtime Interface (CRI), usually containerd.
 Because Docker commands (docker ps) won't work on these nodes, you use crictl.
