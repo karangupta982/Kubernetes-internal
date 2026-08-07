@@ -1442,6 +1442,8 @@ rehta hai (almost never crashes, kyuki ye kuch karta hi nahi),
 isliye Pod ki IP identity stable rehti hai chahe andar wale
 containers restart hote rahein.
 
+Containers can and do restart on their own without the entire Pod restarting, a container inside a Pod can crash and restart on its own while the rest of the Pod stays perfectly healthy. This happens constantly in production due to: Application Crashes, OOM KILL (Out of memory), Liveness Probe Failures. In these cases, the Pod itself does not restart. The Kubelet simply kills the broken container and spins up a fresh version of it inside the existing Pod. Because the Pod stays alive, the Pod IP does not change. When Container A crashes and restarts, it completely loses its internal state.If Container A was the one holding the network namespace and the IP address, that IP address would vanish the moment Container A crashed. When the new container started up, it would have to re-request a new network setup.Because the Pause container is running alongside it and never crashes, the Linux network namespace and the Pod IP stay locked in place. When Container A restarts, it simply rejoins the Pause container's network as if nothing happened. You are completely right that if the Pod restarts, everything changes. However, technically speaking, a Pod never actually "restarts"—it dies and gets replaced.
+
 Verify on a real node:
 crictl ps -a | grep pause
 → Har Pod ke liye ek pause container dikhega
@@ -1467,35 +1469,42 @@ mechanism level.
 # 22) kubectl essentials — daily-driver commands (add to every lecture's notes as you learn more)
 
 ## Context aur cluster info
+```code
 kubectl cluster-info
 kubectl config get-contexts
 kubectl config use-context <name>
 kubectl config current-context
+```
 
 ## Imperative commands (fast, exam mein time bachate hain)
+```code
 kubectl run <name> --image=<image>
 kubectl create deployment <name> --image=<image> --replicas=3
 kubectl expose deployment <name> --port=80 --type=ClusterIP
 kubectl scale deployment <name> --replicas=5
+```
 
 ## Output formats jo exam mein useful hain
+```
 -o yaml          → YAML format mein output
 -o json          → JSON format
 -o wide          → extra columns (IP, node, etc.)
 -o name          → sirf resource names
-
+```
 ## Debugging triplet — ye teen commands 90% debugging solve karte hain
+```
 kubectl get <resource>              → kya exist karta hai
 kubectl describe <resource> <name>  → Events section mein WHY dikhega
 kubectl logs <pod-name>             → container ka stdout/stderr
 kubectl logs <pod-name> -c <container-name>   → multi-container pod mein specific container ka log
 kubectl logs <pod-name> --previous  → crashed container ka last log (CrashLoopBackOff debug karne ke liye)
-
+```
 ## Alias jo time bachata hai (exam mein bhi set kar sakte ho)
+```
 alias k=kubectl
 export do="--dry-run=client -o yaml"
 # usage: k create deploy nginx --image=nginx $do
-
+```
 ---
 
 
